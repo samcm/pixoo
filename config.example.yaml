@@ -1,0 +1,44 @@
+listen: ":6464"
+timezone: Australia/Brisbane
+
+device:
+  host: 192.168.1.221
+  # Pixoo-64 II / newer firmware: http://192.168.1.221:9000/divoom_api
+  # endpoint: ""
+  # Minimum gap between frame pushes. The panel needs 0.5-2 s per frame on a
+  # weak 2.4 GHz link, so anything under 1 s only queues.
+  frame_interval: 1s
+  request_timeout: 10s
+  heartbeat_interval: 60s
+  # Re-send an unchanged frame this often as a safety net.
+  refresh_every: 5m
+  gif_id_reset_every: 32
+  # Omit to leave the panel's own brightness setting alone.
+  brightness: 70
+  sync_time: true
+
+beacon:
+  url: http://192.168.1.139:5052
+  validators: []
+
+scenes:
+  clock:
+    kind: clock
+    options:
+      format: 24h
+      date: true
+      weather: true
+      color: white
+      accent: cyan
+  beacon:
+    kind: beacon
+
+rotation:
+  - scene: clock
+    duration: 5m
+  - scene: beacon
+    duration: 5m
+
+log:
+  level: info
+  format: text
