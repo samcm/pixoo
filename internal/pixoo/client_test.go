@@ -227,3 +227,47 @@ func TestPushAnimationSendsEveryFrameUnderOneID(t *testing.T) {
 		t.Fatal("expected an error for too many frames")
 	}
 }
+
+func TestPushBudgetTriggersReboot(t *testing.T) {
+	dev, srv := newFakeDevice()
+	defer srv.Close()
+
+	c := testClient(srv.URL, Options{FrameInterval: time.Millisecond, CommandGap: time.Millisecond, RebootAfterPushes: 3})
+	ctx := context.Background()
+
+	for i := 0; i < 3; i++ {
+		if _, err := c.PushFrame(ctx, frame(byte(i))); err != nil {
+			t.Fatal(err)
+		}
+
+		if i < 2 && c.NeedsReboot() {
+			t.Fatalf("reboot wanted after %d pushes", i+1)
+		}
+	}
+
+	if !c.NeedsReboot() {
+		t.Fatal("reboot not wanted after budget spent")
+	}
+
+	c.Reboot(ctx)
+
+	if got := dev.count("Device/SysReboot"); got != 1 {
+		t.Fatalf("reboots sent = %d", got)
+	}
+
+	if st := c.Status(); st.PushesSinceBoot != 0 || st.Reboots != 1 || st.Online {
+		t.Fatalf("status after reboot = %+v", st)
+	}
+
+	if c.NeedsReboot() {
+		t.Fatal("budget should reset after reboot")
+	}
+
+	if _, err := c.PushFrame(ctx, frame(9)); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := dev.count("Draw/ResetHttpGifId"); got != 2 {
+		t.Fatalf("gif id resets = %d, want a fresh reset after reboot", got)
+	}
+}

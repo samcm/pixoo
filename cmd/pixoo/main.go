@@ -44,11 +44,12 @@ func run() error {
 	}
 
 	client := pixoo.New(cfg.Device.Host, pixoo.Options{
-		Endpoint:        cfg.Device.Endpoint,
-		FrameInterval:   cfg.Device.FrameInterval,
-		RequestTimeout:  cfg.Device.RequestTimeout,
-		RefreshEvery:    cfg.Device.RefreshEvery,
-		GifIDResetEvery: cfg.Device.GifIDResetEvery,
+		Endpoint:          cfg.Device.Endpoint,
+		FrameInterval:     cfg.Device.FrameInterval,
+		RequestTimeout:    cfg.Device.RequestTimeout,
+		RefreshEvery:      cfg.Device.RefreshEvery,
+		GifIDResetEvery:   cfg.Device.GifIDResetEvery,
+		RebootAfterPushes: cfg.Device.RebootAfterPushes,
 	}, logger)
 
 	deps := scene.Deps{

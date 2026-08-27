@@ -13,6 +13,12 @@ until it is power-cycled. This daemon keeps a single keep-alive connection,
 serialises every call, rate-limits frames, skips unchanged frames, and drops the
 connection on any transport error so the panel gets its socket back.
 
+The firmware also leaks heap on every pushed frame and goes deaf (power cycle
+only) when it runs out — about 780 pushes on a 2025 firmware. Every push is
+budgeted: scenes re-render only when their content changes, and the daemon
+reboots the panel (`Device/SysReboot`, ~30 s of boot logo) every
+`reboot_after_pushes` frames before the heap runs dry.
+
 ## Run
 
 ```

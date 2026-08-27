@@ -18,6 +18,7 @@ type beaconScene struct {
 	client *beacon.Client
 	ours   map[uint64]bool
 	logger *slog.Logger
+	every  time.Duration
 
 	mu         sync.Mutex
 	genesis    time.Time
@@ -32,7 +33,7 @@ type beaconScene struct {
 	lastErrAt  time.Time
 }
 
-func newBeacon(name string, _ map[string]any, deps Deps) (Scene, error) {
+func newBeacon(name string, opts map[string]any, deps Deps) (Scene, error) {
 	if deps.Beacon == nil {
 		return nil, fmt.Errorf("scene %s: beacon.url is not configured", name)
 	}
@@ -42,11 +43,19 @@ func newBeacon(name string, _ map[string]any, deps Deps) (Scene, error) {
 		ours[v] = true
 	}
 
+	// Every render is a pushed frame and the panel leaks heap per push, so
+	// the default is one render per slot rather than a smooth per-second bar.
+	refresh := beacon.SlotDuration
+	if v, err := time.ParseDuration(optString(opts, "refresh", "")); err == nil && v > 0 {
+		refresh = v
+	}
+
 	return &beaconScene{
 		name:   name,
 		client: deps.Beacon,
 		ours:   ours,
 		logger: deps.Logger.WithGroup("beacon"),
+		every:  refresh,
 		duties: map[uint64][]beacon.Duty{},
 	}, nil
 }
@@ -80,7 +89,12 @@ func (b *beaconScene) Render(ctx context.Context, now time.Time) (Frame, time.Du
 	cv.Text(1, 9, "SLOT", render.Tiny, render.Grey, 1)
 	cv.TextRight(63, 8, strconv.FormatUint(slot, 10), render.Small, render.White, 1)
 
-	cv.Bar(1, 17, 62, 3, frac, render.Green, render.Dim)
+	if b.every <= 4*time.Second {
+		cv.Bar(1, 17, 62, 3, frac, render.Green, render.Dim)
+	} else {
+		cv.HLine(1, 62, 18, render.Dim)
+	}
+
 	cv.Bar(1, 22, 62, 2, (float64(slotInEpoch)+frac)/beacon.SlotsPerEpoch, render.Blue, render.Dim)
 
 	headLag := int64(slot) - int64(b.head.Slot)
@@ -133,7 +147,19 @@ func (b *beaconScene) Render(ctx context.Context, now time.Time) (Frame, time.Du
 	cv.HLine(1, 62, 56, render.Dim)
 	cv.TextCentered(58, status, render.Tiny, statusCol, 1)
 
-	return Frame{Image: cv.Img}, time.Second, nil
+	return Frame{Image: cv.Img}, b.nextRender(now), nil
+}
+
+// nextRender aligns renders to slot boundaries when refreshing per slot so
+// the slot number changes as soon as the slot does.
+func (b *beaconScene) nextRender(now time.Time) time.Duration {
+	if b.every < beacon.SlotDuration {
+		return b.every
+	}
+
+	elapsed := now.Sub(b.genesis) % beacon.SlotDuration
+
+	return beacon.SlotDuration - elapsed + 200*time.Millisecond
 }
 
 func (b *beaconScene) drawProposer(cv *render.Canvas, slot uint64) {

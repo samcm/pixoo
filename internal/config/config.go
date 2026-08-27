@@ -27,6 +27,7 @@ type Device struct {
 	HeartbeatInterval time.Duration `yaml:"heartbeat_interval"`
 	RefreshEvery      time.Duration `yaml:"refresh_every"`
 	GifIDResetEvery   int           `yaml:"gif_id_reset_every"`
+	RebootAfterPushes int           `yaml:"reboot_after_pushes"`
 	Brightness        *int          `yaml:"brightness"`
 	SyncTime          bool          `yaml:"sync_time"`
 }
@@ -59,8 +60,9 @@ func Default() Config {
 			FrameInterval:     time.Second,
 			RequestTimeout:    10 * time.Second,
 			HeartbeatInterval: 60 * time.Second,
-			RefreshEvery:      5 * time.Minute,
+			RefreshEvery:      30 * time.Minute,
 			GifIDResetEvery:   32,
+			RebootAfterPushes: 400,
 			SyncTime:          true,
 		},
 		Log: Log{Level: "info", Format: "text"},

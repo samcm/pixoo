@@ -56,6 +56,7 @@
         <span>skipped</span><span id="skipped">–</span>
         <span>errors</span><span id="errors">–</span>
         <span>pic id</span><span id="picid">–</span>
+        <span>pushes/boot</span><span id="sinceboot">–</span>
         <span>uptime</span><span id="uptime">–</span>
       </div>
       <div id="lasterr" class="err"></div>
@@ -84,6 +85,7 @@
       <div class="row">
         <button id="on">On</button>
         <button id="off" class="danger">Off</button>
+        <button id="reboot" class="danger" title="Device/SysReboot — ~30 s of boot logo">Reboot panel</button>
         <span class="muted">brightness <b id="bval">–</b></span>
       </div>
       <input id="bright" type="range" min="0" max="100" value="50">
@@ -152,6 +154,7 @@ async function refresh() {
     $('skipped').textContent = dev.skipped;
     $('errors').textContent = dev.errors;
     $('picid').textContent = dev.pic_id;
+    $('sinceboot').textContent = dev.pushes_since_boot + (dev.reboots ? ' (' + dev.reboots + ' reboots)' : '');
     $('uptime').textContent = fmtUptime(st.uptime_seconds);
     $('lasterr').textContent = dev.last_error && !dev.online ? dev.last_error : '';
     if (!dragging && st.brightness >= 0) { $('bright').value = st.brightness; $('bval').textContent = st.brightness; }
@@ -184,6 +187,7 @@ async function loadScenes() {
 $('resume').onclick = () => post('/api/resume', {}).then(refresh).catch(alert);
 $('on').onclick = () => post('/api/screen', { on: true }).then(refresh).catch(alert);
 $('off').onclick = () => post('/api/screen', { on: false }).then(refresh).catch(alert);
+$('reboot').onclick = () => confirm('Reboot the panel? ~30 s of boot logo.') && post('/api/reboot', {}).then(refresh).catch(alert);
 $('bright').oninput = e => { dragging = true; $('bval').textContent = e.target.value; };
 $('bright').onchange = e => { dragging = false; post('/api/brightness', { value: Number(e.target.value) }).then(refresh).catch(alert); };
 $('sendtext').onclick = () => post('/api/text', {

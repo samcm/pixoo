@@ -42,6 +42,7 @@ func New(a *app.App, logger *slog.Logger) *Server {
 	s.mux.HandleFunc("POST /api/text", s.text)
 	s.mux.HandleFunc("POST /api/image", s.image)
 	s.mux.HandleFunc("POST /api/command", s.command)
+	s.mux.HandleFunc("POST /api/reboot", s.reboot)
 
 	return s
 }
@@ -244,6 +245,11 @@ func (s *Server) image(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, s.app.Status())
+}
+
+func (s *Server) reboot(w http.ResponseWriter, _ *http.Request) {
+	s.app.RebootPanel()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (s *Server) command(w http.ResponseWriter, r *http.Request) {

@@ -11,8 +11,12 @@ device:
   request_timeout: 10s
   heartbeat_interval: 60s
   # Re-send an unchanged frame this often as a safety net.
-  refresh_every: 5m
+  refresh_every: 30m
   gif_id_reset_every: 32
+  # The firmware leaks heap on every pushed frame and goes deaf (power cycle
+  # only) once it runs out — measured ~780 pushes on firmware from 2025.
+  # Reboot the panel before that. 0 disables.
+  reboot_after_pushes: 400
   # Omit to leave the panel's own brightness setting alone.
   brightness: 70
   sync_time: true
@@ -32,6 +36,9 @@ scenes:
       accent: cyan
   beacon:
     kind: beacon
+    options:
+      # One render per slot by default; anything <= 4s also animates the slot bar.
+      refresh: 12s
 
 rotation:
   - scene: clock

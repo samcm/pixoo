@@ -50,14 +50,15 @@ type App struct {
 	started    time.Time
 	wake       chan struct{}
 
-	mu        sync.Mutex
-	current   string
-	rotIdx    int
-	rotStart  time.Time
-	override  *override
-	preview   *image.RGBA
-	screenOff bool
-	brightNow int
+	mu          sync.Mutex
+	current     string
+	rotIdx      int
+	rotStart    time.Time
+	override    *override
+	preview     *image.RGBA
+	screenOff   bool
+	brightNow   int
+	forceReboot bool
 }
 
 func New(o Options) (*App, error) {
@@ -112,6 +113,17 @@ func (a *App) Run(ctx context.Context) error {
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+
+		a.mu.Lock()
+		forced := a.forceReboot
+		a.forceReboot = false
+		a.mu.Unlock()
+
+		if forced || a.client.NeedsReboot() {
+			a.rebootPanel(ctx)
+
+			continue
 		}
 
 		now := time.Now()
@@ -171,6 +183,35 @@ func (a *App) setup(ctx context.Context) {
 			a.logger.Warn("brightness set failed", slog.String("error", err.Error()))
 		}
 	}
+}
+
+// rebootPanel restarts the panel to reclaim the heap its firmware leaks on
+// every pushed frame, then waits for it to answer again.
+func (a *App) rebootPanel(ctx context.Context) {
+	a.client.Reboot(ctx)
+	a.sleep(ctx, 20*time.Second)
+
+	for attempt := 0; attempt < 12 && ctx.Err() == nil; attempt++ {
+		if err := a.client.Heartbeat(ctx); err == nil {
+			a.logger.Info("panel back after reboot")
+			a.client.Invalidate()
+
+			return
+		}
+
+		a.sleep(ctx, 5*time.Second)
+	}
+
+	a.logger.Warn("panel did not come back after reboot")
+}
+
+// RebootPanel is the operator-triggered version of the push-budget reboot.
+func (a *App) RebootPanel() {
+	a.mu.Lock()
+	a.forceReboot = true
+	a.mu.Unlock()
+
+	a.nudge()
 }
 
 func (a *App) heartbeatLoop(ctx context.Context) {

@@ -36,6 +36,12 @@ type Options struct {
 	RequestTimeout  time.Duration
 	RefreshEvery    time.Duration
 	GifIDResetEvery int
+	// RebootAfterPushes triggers a Device/SysReboot once this many frames
+	// have been pushed since the panel last booted. The firmware leaks heap
+	// on every Draw/SendHttpGif and goes deaf when it runs out; a reboot
+	// before that point costs ~30 s of boot logo instead of a power cycle.
+	// Zero disables it.
+	RebootAfterPushes int
 }
 
 func (o *Options) setDefaults() {
@@ -49,7 +55,7 @@ func (o *Options) setDefaults() {
 		o.RequestTimeout = 10 * time.Second
 	}
 	if o.RefreshEvery <= 0 {
-		o.RefreshEvery = 5 * time.Minute
+		o.RefreshEvery = 30 * time.Minute
 	}
 	if o.GifIDResetEvery <= 0 {
 		o.GifIDResetEvery = 32
@@ -67,6 +73,11 @@ type Status struct {
 	Skipped     uint64    `json:"skipped"`
 	Errors      uint64    `json:"errors"`
 	PicID       int       `json:"pic_id"`
+	// PushesSinceBoot counts frames since the panel last (re)booted as far
+	// as this process knows; it resets on Reboot and starts at zero.
+	PushesSinceBoot int       `json:"pushes_since_boot"`
+	Reboots         uint64    `json:"reboots"`
+	LastReboot      time.Time `json:"last_reboot"`
 }
 
 type Conf struct {
@@ -111,6 +122,7 @@ type Client struct {
 	hasLast     bool
 	picID       int
 	pushes      int
+	sinceBoot   int
 
 	stateMu sync.RWMutex
 	status  Status
@@ -386,10 +398,64 @@ func (c *Client) framePushed(hash [sha256.Size]byte) {
 	c.lastFrame = time.Now()
 	c.picID++
 	c.pushes++
+	c.sinceBoot++
 
 	c.stateMu.Lock()
 	c.status.Frames++
 	c.status.PicID = c.picID
+	c.status.PushesSinceBoot = c.sinceBoot
+	c.stateMu.Unlock()
+}
+
+// NeedsReboot reports whether the push budget for this boot is spent.
+func (c *Client) NeedsReboot() bool {
+	if c.opts.RebootAfterPushes <= 0 {
+		return false
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.sinceBoot >= c.opts.RebootAfterPushes
+}
+
+// Reboot asks the panel to restart. The panel does not answer the request,
+// so a transport error here is expected and not counted. It then takes
+// ~30 s to come back; callers should heartbeat until it does.
+func (c *Client) Reboot(ctx context.Context) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.logger.Info("rebooting panel", slog.Int("pushes_since_boot", c.sinceBoot))
+
+	payload, _ := json.Marshal(map[string]any{"Command": "Device/SysReboot"})
+
+	reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, c.opts.Endpoint, bytes.NewReader(payload))
+	if err == nil {
+		if resp, err := c.http.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	}
+
+	c.transport.CloseIdleConnections()
+	c.lastRequest = time.Now()
+	c.markRebooted()
+}
+
+func (c *Client) markRebooted() {
+	c.sinceBoot = 0
+	c.picID = 0
+	c.pushes = 0
+	c.hasLast = false
+
+	c.stateMu.Lock()
+	c.status.Online = false
+	c.status.PushesSinceBoot = 0
+	c.status.Reboots++
+	c.status.LastReboot = time.Now()
 	c.stateMu.Unlock()
 }
 
@@ -521,7 +587,10 @@ func (c *Client) fail(command string, err error) error {
 	c.stateMu.Unlock()
 
 	if wasOnline {
-		c.logger.Warn("device offline", slog.String("command", command), slog.String("error", err.Error()))
+		c.logger.Warn("device offline",
+			slog.String("command", command),
+			slog.String("error", err.Error()),
+			slog.Int("pushes_since_boot", c.sinceBoot))
 	}
 
 	return fmt.Errorf("pixoo: %s: %w", command, err)
