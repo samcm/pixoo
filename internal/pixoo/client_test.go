@@ -16,12 +16,13 @@ import (
 )
 
 type fakeDevice struct {
-	mu       sync.Mutex
-	commands []string
-	picIDs   []int
-	inflight atomic.Int32
-	overlap  atomic.Bool
-	reply    func(cmd string) string
+	mu           sync.Mutex
+	commands     []string
+	picIDs       []int
+	contentTypes []string
+	inflight     atomic.Int32
+	overlap      atomic.Bool
+	reply        func(cmd string) string
 }
 
 func newFakeDevice() (*fakeDevice, *httptest.Server) {
@@ -43,6 +44,7 @@ func newFakeDevice() (*fakeDevice, *httptest.Server) {
 
 		d.mu.Lock()
 		d.commands = append(d.commands, cmd)
+		d.contentTypes = append(d.contentTypes, r.Header.Get("Content-Type"))
 		if cmd == "Draw/SendHttpGif" {
 			d.picIDs = append(d.picIDs, int(payload["PicID"].(float64)))
 		}
@@ -67,6 +69,19 @@ func (d *fakeDevice) count(cmd string) int {
 	}
 
 	return n
+}
+
+func (d *fakeDevice) allJSON() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for _, contentType := range d.contentTypes {
+		if contentType != "application/json" {
+			return false
+		}
+	}
+
+	return len(d.contentTypes) > 0
 }
 
 func testClient(url string, opts Options) *Client {
@@ -146,6 +161,10 @@ func TestRequestsAreSerialisedAndPaced(t *testing.T) {
 
 	if elapsed := time.Since(start); elapsed < 3*40*time.Millisecond {
 		t.Fatalf("4 frames took %v, want at least 120ms of pacing", elapsed)
+	}
+
+	if !dev.allJSON() {
+		t.Fatal("requests must use application/json")
 	}
 }
 
