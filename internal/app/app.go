@@ -77,7 +77,7 @@ func New(o Options) (*App, error) {
 	}
 
 	if o.HeartbeatInterval <= 0 {
-		o.HeartbeatInterval = time.Minute
+		o.HeartbeatInterval = 2 * time.Second
 	}
 
 	if o.Location == nil {
@@ -185,8 +185,8 @@ func (a *App) setup(ctx context.Context) {
 	}
 }
 
-// rebootPanel restarts the panel to reclaim the heap its firmware leaks on
-// every pushed frame, then waits for it to answer again.
+// rebootPanel restarts the panel on an explicit operator request (or when a
+// legacy push budget is configured), then waits for it to answer again.
 func (a *App) rebootPanel(ctx context.Context) {
 	a.client.Reboot(ctx)
 	a.sleep(ctx, 20*time.Second)
@@ -205,7 +205,7 @@ func (a *App) rebootPanel(ctx context.Context) {
 	a.logger.Warn("panel did not come back after reboot")
 }
 
-// RebootPanel is the operator-triggered version of the push-budget reboot.
+// RebootPanel queues an operator-triggered restart.
 func (a *App) RebootPanel() {
 	a.mu.Lock()
 	a.forceReboot = true

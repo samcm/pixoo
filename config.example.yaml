@@ -9,14 +9,15 @@ device:
   # weak 2.4 GHz link, so anything under 1 s only queues.
   frame_interval: 1s
   request_timeout: 10s
-  heartbeat_interval: 60s
+  # The panel closes idle HTTP sessions after 5s and cannot evict stale
+  # sockets. Stay below that deadline so all commands reuse one connection.
+  heartbeat_interval: 2s
   # Re-send an unchanged frame this often as a safety net.
   refresh_every: 30m
   gif_id_reset_every: 32
-  # The firmware leaks heap on every pushed frame and goes deaf (power cycle
-  # only) once it runs out — measured ~780 pushes on firmware from 2025.
-  # Reboot the panel before that. 0 disables.
-  reboot_after_pushes: 400
+  # Legacy safety valve. The keep-alive above avoids the socket exhaustion
+  # that was previously mistaken for a per-frame heap leak.
+  reboot_after_pushes: 0
   # Omit to leave the panel's own brightness setting alone.
   brightness: 70
   sync_time: true

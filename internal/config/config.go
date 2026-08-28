@@ -57,12 +57,15 @@ func Default() Config {
 		Listen:   ":6464",
 		Timezone: "Local",
 		Device: Device{
-			FrameInterval:     time.Second,
-			RequestTimeout:    10 * time.Second,
-			HeartbeatInterval: 60 * time.Second,
+			FrameInterval:  time.Second,
+			RequestTimeout: 10 * time.Second,
+			// The stock ESP-IDF server drops an idle HTTP session after five
+			// seconds and has no LRU socket eviction. Keep the one connection
+			// active instead of continually creating new sessions.
+			HeartbeatInterval: 2 * time.Second,
 			RefreshEvery:      30 * time.Minute,
 			GifIDResetEvery:   32,
-			RebootAfterPushes: 400,
+			RebootAfterPushes: 0,
 			SyncTime:          true,
 		},
 		Log: Log{Level: "info", Format: "text"},

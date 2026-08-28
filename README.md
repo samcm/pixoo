@@ -13,11 +13,11 @@ until it is power-cycled. This daemon keeps a single keep-alive connection,
 serialises every call, rate-limits frames, skips unchanged frames, and drops the
 connection on any transport error so the panel gets its socket back.
 
-The firmware also leaks heap on every pushed frame and goes deaf (power cycle
-only) when it runs out — about 780 pushes on a 2025 firmware. Every push is
-budgeted: scenes re-render only when their content changes, and the daemon
-reboots the panel (`Device/SysReboot`, ~30 s of boot logo) every
-`reboot_after_pushes` frames before the heap runs dry.
+The firmware's ESP-IDF HTTP server times out an idle session after five seconds,
+allows only seven sockets, and has LRU eviction disabled. The daemon sends a
+small heartbeat before that deadline so every command keeps using one session;
+`reboot_after_pushes` remains available as a disabled-by-default legacy safety
+valve.
 
 ## Run
 

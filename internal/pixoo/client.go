@@ -36,11 +36,8 @@ type Options struct {
 	RequestTimeout  time.Duration
 	RefreshEvery    time.Duration
 	GifIDResetEvery int
-	// RebootAfterPushes triggers a Device/SysReboot once this many frames
-	// have been pushed since the panel last booted. The firmware leaks heap
-	// on every Draw/SendHttpGif and goes deaf when it runs out; a reboot
-	// before that point costs ~30 s of boot logo instead of a power cycle.
-	// Zero disables it.
+	// RebootAfterPushes is a legacy safety valve that triggers a
+	// Device/SysReboot after this many frames. Zero disables it.
 	RebootAfterPushes int
 }
 
