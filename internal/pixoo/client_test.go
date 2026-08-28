@@ -95,7 +95,7 @@ func frame(b byte) []byte {
 	return bytes.Repeat([]byte{b}, FrameLen)
 }
 
-func TestPushFrameDedupesAndResets(t *testing.T) {
+func TestPushFrameDedupesAndReusesOneID(t *testing.T) {
 	dev, srv := newFakeDevice()
 	defer srv.Close()
 
@@ -118,12 +118,12 @@ func TestPushFrameDedupesAndResets(t *testing.T) {
 		}
 	}
 
-	if got := dev.count("Draw/ResetHttpGifId"); got != 2 {
-		t.Fatalf("resets = %d, want 2 (start + after 3 pushes)", got)
+	if got := dev.count("Draw/ResetHttpGifId"); got != 1 {
+		t.Fatalf("resets = %d, want only the initial reset", got)
 	}
 
-	if got := dev.picIDs; len(got) != 4 || got[0] != 1 || got[1] != 2 || got[2] != 3 || got[3] != 1 {
-		t.Fatalf("pic ids = %v", got)
+	if got := dev.picIDs; len(got) != 4 || got[0] != 1 || got[1] != 1 || got[2] != 1 || got[3] != 1 {
+		t.Fatalf("pic ids = %v, want every static frame under id 1", got)
 	}
 
 	if st := c.Status(); st.Frames != 4 || st.Skipped != 1 || !st.Online {
@@ -244,6 +244,34 @@ func TestPushAnimationSendsEveryFrameUnderOneID(t *testing.T) {
 
 	if _, err := c.PushAnimation(context.Background(), make([][]byte, MaxFrames+1), time.Second); err == nil {
 		t.Fatal("expected an error for too many frames")
+	}
+}
+
+func TestStaticAndAnimationTransitionsResetID(t *testing.T) {
+	dev, srv := newFakeDevice()
+	defer srv.Close()
+
+	c := testClient(srv.URL, Options{FrameInterval: time.Millisecond, CommandGap: time.Millisecond})
+	ctx := context.Background()
+
+	if _, err := c.PushFrame(ctx, frame(1)); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.PushAnimation(ctx, [][]byte{frame(2), frame(3)}, 100*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.PushFrame(ctx, frame(4)); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := dev.count("Draw/ResetHttpGifId"); got != 3 {
+		t.Fatalf("resets = %d, want one for each mode transition", got)
+	}
+
+	if got := dev.picIDs; len(got) != 4 || got[0] != 1 || got[1] != 1 || got[2] != 1 || got[3] != 1 {
+		t.Fatalf("pic ids = %v, want each mode to restart at id 1", got)
 	}
 }
 

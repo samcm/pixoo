@@ -19,6 +19,11 @@ small heartbeat before that deadline so every command keeps using one session;
 `reboot_after_pushes` remains available as a disabled-by-default legacy safety
 valve.
 
+Single-frame dashboard updates also reuse one `PicID`. In the firmware, changing
+that ID enters the GIF controller's animation teardown path; retaining it lets
+the writer replace and free the completed frame without repeatedly exercising
+that path. Real multi-frame animations still receive their own IDs.
+
 ## Run
 
 ```

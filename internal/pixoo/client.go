@@ -120,6 +120,7 @@ type Client struct {
 	picID       int
 	pushes      int
 	sinceBoot   int
+	singleFrame bool
 
 	stateMu sync.RWMutex
 	status  Status
@@ -299,7 +300,7 @@ func (c *Client) PushFrame(ctx context.Context, rgb []byte) (bool, error) {
 		return false, err
 	}
 
-	if err := c.ensureGifID(ctx); err != nil {
+	if err := c.ensureSingleFrameID(ctx); err != nil {
 		return false, err
 	}
 
@@ -309,7 +310,7 @@ func (c *Client) PushFrame(ctx context.Context, rgb []byte) (bool, error) {
 		return false, err
 	}
 
-	c.framePushed(hash)
+	c.framePushed(hash, false)
 
 	return true, nil
 }
@@ -344,7 +345,7 @@ func (c *Client) PushAnimation(ctx context.Context, frames [][]byte, delay time.
 		return false, err
 	}
 
-	if err := c.ensureGifID(ctx); err != nil {
+	if err := c.ensureAnimationID(ctx); err != nil {
 		return false, err
 	}
 
@@ -361,7 +362,7 @@ func (c *Client) PushAnimation(ctx context.Context, frames [][]byte, delay time.
 		}
 	}
 
-	c.framePushed(hash)
+	c.framePushed(hash, true)
 
 	return true, nil
 }
@@ -389,11 +390,13 @@ func (c *Client) unchanged(hash [sha256.Size]byte) bool {
 	return false
 }
 
-func (c *Client) framePushed(hash [sha256.Size]byte) {
+func (c *Client) framePushed(hash [sha256.Size]byte, advanceID bool) {
 	c.lastHash = hash
 	c.hasLast = true
 	c.lastFrame = time.Now()
-	c.picID++
+	if advanceID {
+		c.picID++
+	}
 	c.pushes++
 	c.sinceBoot++
 
@@ -449,6 +452,7 @@ func (c *Client) markRebooted() {
 	c.picID = 0
 	c.pushes = 0
 	c.hasLast = false
+	c.singleFrame = false
 
 	c.stateMu.Lock()
 	c.status.Online = false
@@ -458,11 +462,42 @@ func (c *Client) markRebooted() {
 	c.stateMu.Unlock()
 }
 
-func (c *Client) ensureGifID(ctx context.Context) error {
+// ensureSingleFrameID keeps dashboard updates under one PicID. The firmware
+// treats every new ID as a new animation and enters a lock-heavy teardown path;
+// a completed one-frame image can instead be replaced safely under the same ID.
+func (c *Client) ensureSingleFrameID(ctx context.Context) error {
+	if c.singleFrame && c.picID == 1 {
+		return nil
+	}
+
+	if err := c.resetGifID(ctx); err != nil {
+		return err
+	}
+
+	c.singleFrame = true
+
+	return nil
+}
+
+func (c *Client) ensureAnimationID(ctx context.Context) error {
+	if c.singleFrame {
+		if err := c.resetGifID(ctx); err != nil {
+			return err
+		}
+
+		c.singleFrame = false
+
+		return nil
+	}
+
 	if c.picID > 0 && c.pushes < c.opts.GifIDResetEvery {
 		return nil
 	}
 
+	return c.resetGifID(ctx)
+}
+
+func (c *Client) resetGifID(ctx context.Context) error {
 	if _, err := c.do(ctx, "Draw/ResetHttpGifId", nil); err != nil {
 		return err
 	}
