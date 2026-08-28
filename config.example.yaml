@@ -9,8 +9,7 @@ device:
   # weak 2.4 GHz link, so anything under 1 s only queues.
   frame_interval: 1s
   request_timeout: 10s
-  # The panel closes idle HTTP sessions after 5s and cannot evict stale
-  # sockets. Stay below that deadline so all commands reuse one connection.
+  # Keep idle scenes below the firmware's 5s HTTP-session timeout.
   heartbeat_interval: 2s
   # Re-send an unchanged frame this often as a safety net.
   refresh_every: 30m
@@ -38,8 +37,9 @@ scenes:
   beacon:
     kind: beacon
     options:
-      # One render per slot by default; anything <= 4s also animates the slot bar.
-      refresh: 12s
+      # This firmware wedges on slow GIF updates but survived a 689-frame
+      # one-second soak. Keep the upload path continuously active.
+      refresh: 1s
 
 rotation:
   - scene: clock

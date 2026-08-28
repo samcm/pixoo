@@ -43,9 +43,9 @@ func newBeacon(name string, opts map[string]any, deps Deps) (Scene, error) {
 		ours[v] = true
 	}
 
-	// Every render is a pushed frame and the panel leaks heap per push, so
-	// the default is one render per slot rather than a smooth per-second bar.
-	refresh := beacon.SlotDuration
+	// This firmware's large-request path is cadence-sensitive: a one-second
+	// soak survived 689 frames while per-slot updates repeatedly wedged HTTP.
+	refresh := time.Second
 	if v, err := time.ParseDuration(optString(opts, "refresh", "")); err == nil && v > 0 {
 		refresh = v
 	}

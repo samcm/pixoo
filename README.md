@@ -14,15 +14,12 @@ serialises every call, rate-limits frames, skips unchanged frames, and drops the
 connection on any transport error so the panel gets its socket back.
 
 The firmware's ESP-IDF HTTP server times out an idle session after five seconds,
-allows only seven sockets, and has LRU eviction disabled. The daemon sends a
-small heartbeat before that deadline so every command keeps using one session;
-`reboot_after_pushes` remains available as a disabled-by-default legacy safety
+allows only seven sockets, and has LRU eviction disabled. Testing this panel
+also found that a small command heartbeat does not keep the large GIF-upload
+path healthy: 12-second frame updates wedged it while one-second frame updates
+survived 689 consecutive pushes. The beacon scene therefore renders at 1 Hz by
+default. `reboot_after_pushes` remains available as a disabled legacy safety
 valve.
-
-Single-frame dashboard updates also reuse one `PicID`. In the firmware, changing
-that ID enters the GIF controller's animation teardown path; retaining it lets
-the writer replace and free the completed frame without repeatedly exercising
-that path. Real multi-frame animations still receive their own IDs.
 
 ## Run
 
