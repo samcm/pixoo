@@ -21,10 +21,11 @@ type Config struct {
 }
 
 type Stream struct {
-	MaxFrames   int           `yaml:"max_frames"`
-	FrameDelay  time.Duration `yaml:"frame_delay"`
-	FlushAfter  time.Duration `yaml:"flush_after"`
-	SourceLease time.Duration `yaml:"source_lease"`
+	MaxFrames       int           `yaml:"max_frames"`
+	FrameDelay      time.Duration `yaml:"frame_delay"`
+	FlushAfter      time.Duration `yaml:"flush_after"`
+	MinClipInterval time.Duration `yaml:"min_clip_interval"`
+	SourceLease     time.Duration `yaml:"source_lease"`
 }
 
 type Device struct {
@@ -77,10 +78,11 @@ func Default() Config {
 			SyncTime:          true,
 		},
 		Stream: Stream{
-			MaxFrames:   30,
-			FrameDelay:  time.Second,
-			FlushAfter:  30 * time.Second,
-			SourceLease: 2 * time.Minute,
+			MaxFrames:       30,
+			FrameDelay:      time.Second,
+			FlushAfter:      30 * time.Second,
+			MinClipInterval: 5 * time.Minute,
+			SourceLease:     2 * time.Minute,
 		},
 		Log: Log{Level: "info", Format: "text"},
 	}
@@ -147,6 +149,9 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.Stream.FlushAfter <= 0 {
 		return cfg, fmt.Errorf("config: stream.flush_after must be positive")
+	}
+	if cfg.Stream.MinClipInterval <= 0 {
+		return cfg, fmt.Errorf("config: stream.min_clip_interval must be positive")
 	}
 	if cfg.Stream.SourceLease <= 0 {
 		return cfg, fmt.Errorf("config: stream.source_lease must be positive")

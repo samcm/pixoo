@@ -90,10 +90,11 @@ func run() error {
 	// The buffered stream is a transport feature rather than part of the
 	// configured rotation, so it is always available under a stable name.
 	scenes["stream"] = scene.NewStream("stream", scene.StreamOptions{
-		MaxFrames:   cfg.Stream.MaxFrames,
-		FrameDelay:  cfg.Stream.FrameDelay,
-		FlushAfter:  cfg.Stream.FlushAfter,
-		SourceLease: cfg.Stream.SourceLease,
+		MaxFrames:       cfg.Stream.MaxFrames,
+		FrameDelay:      cfg.Stream.FrameDelay,
+		FlushAfter:      cfg.Stream.FlushAfter,
+		MinClipInterval: cfg.Stream.MinClipInterval,
+		SourceLease:     cfg.Stream.SourceLease,
 	})
 
 	rotation := make([]app.Entry, 0, len(cfg.Rotation))

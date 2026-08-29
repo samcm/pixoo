@@ -70,6 +70,7 @@
         <span>buffer</span><span id="streambuffer">0</span>
         <span>current clip</span><span id="streamcurrent">0 frames</span>
         <span>next flush</span><span id="streamflush">–</span>
+        <span>next commit</span><span id="streamcommit">–</span>
         <span>clips built</span><span id="streamclips">0</span>
         <span>coalesced</span><span id="streamcoalesced">0</span>
         <span>dropped</span><span id="streamdropped">0</span>
@@ -177,6 +178,7 @@ async function refresh() {
     $('streambuffer').textContent = stream.building_frames + ' / ' + stream.max_frames + (stream.ready_frames ? ` (+${stream.ready_frames} ready)` : '');
     $('streamcurrent').textContent = stream.current_frames + ' frames';
     $('streamflush').textContent = stream.next_flush_at && !stream.next_flush_at.startsWith('0001-') ? new Date(stream.next_flush_at).toLocaleTimeString() : '–';
+    $('streamcommit').textContent = stream.next_clip_at && !stream.next_clip_at.startsWith('0001-') ? new Date(stream.next_clip_at).toLocaleTimeString() : '–';
     $('streamclips').textContent = stream.clips_built;
     $('streamcoalesced').textContent = stream.coalesced;
     $('streamdropped').textContent = stream.dropped_frames;

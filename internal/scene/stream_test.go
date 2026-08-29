@@ -88,6 +88,88 @@ func TestStreamLatestReadyClipWins(t *testing.T) {
 	}
 }
 
+func TestStreamKeepsResidentClipUntilMinimumInterval(t *testing.T) {
+	s := NewStream("stream", StreamOptions{
+		MaxFrames:       2,
+		FrameDelay:      time.Second,
+		FlushAfter:      time.Minute,
+		MinClipInterval: 10 * time.Minute,
+		SourceLease:     time.Hour,
+	})
+	now := time.Date(2026, time.August, 29, 12, 0, 0, 0, time.UTC)
+
+	for i, value := range []uint8{1, 2} {
+		if _, err := s.addFrame(solidFrame(value), "studio", now.Add(time.Duration(i)*time.Second)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, _, err := s.Render(t.Context(), now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i, value := range []uint8{3, 4} {
+		if _, err := s.addFrame(solidFrame(value), "studio", now.Add(time.Minute+time.Duration(i)*time.Second)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stillFirst, next, err := s.Render(t.Context(), now.Add(2*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stillFirst.Frames[0].RGBAAt(0, 0).R != first.Frames[0].RGBAAt(0, 0).R {
+		t.Fatal("resident clip changed before minimum interval")
+	}
+	if next <= 0 || next > 8*time.Minute {
+		t.Fatalf("next render = %s, want a wake no later than the resident deadline", next)
+	}
+	if st := s.Status(); st.ReadyFrames != 2 || st.NextClipAt.IsZero() {
+		t.Fatalf("pending clip status = %+v", st)
+	}
+
+	replacement, _, err := s.Render(t.Context(), now.Add(10*time.Minute+time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := replacement.Frames[0].RGBAAt(0, 0).R; got != 3 {
+		t.Fatalf("replacement first frame = %d, want 3", got)
+	}
+}
+
+func TestStreamExplicitFlushBypassesMinimumInterval(t *testing.T) {
+	s := NewStream("stream", StreamOptions{
+		MaxFrames:       2,
+		FrameDelay:      time.Second,
+		FlushAfter:      time.Minute,
+		MinClipInterval: time.Hour,
+		SourceLease:     time.Hour,
+	})
+	now := time.Now()
+
+	for i, value := range []uint8{1, 2} {
+		if _, err := s.addFrame(solidFrame(value), "studio", now.Add(time.Duration(i)*time.Second)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, err := s.Render(t.Context(), now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addFrame(solidFrame(9), "studio", now.Add(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Flush("studio"); err != nil {
+		t.Fatal(err)
+	}
+
+	replacement, _, err := s.Render(t.Context(), now.Add(3*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replacement.Image == nil || replacement.Image.RGBAAt(0, 0).R != 9 {
+		t.Fatal("explicit flush did not replace the resident clip immediately")
+	}
+}
+
 func TestStreamLeaseAndReset(t *testing.T) {
 	s := NewStream("stream", StreamOptions{SourceLease: time.Minute})
 	now := time.Date(2026, time.August, 29, 12, 0, 0, 0, time.UTC)

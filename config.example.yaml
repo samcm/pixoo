@@ -24,10 +24,13 @@ device:
 # Individual still-image updates can be submitted here and are assembled into
 # one device-side animation. The first frame appears immediately; subsequent
 # clips are uploaded in bounded batches while the previous clip keeps looping.
+# Ready clips collapse to the newest one during the minimum resident interval,
+# avoiding a visible device reload for every renderer batch.
 stream:
   max_frames: 30
   frame_delay: 1s
   flush_after: 30s
+  min_clip_interval: 5m
   source_lease: 2m
 
 beacon:

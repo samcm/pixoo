@@ -14,10 +14,11 @@ import (
 const anonymousStreamSource = "anonymous"
 
 type StreamOptions struct {
-	MaxFrames   int
-	FrameDelay  time.Duration
-	FlushAfter  time.Duration
-	SourceLease time.Duration
+	MaxFrames       int
+	FrameDelay      time.Duration
+	FlushAfter      time.Duration
+	MinClipInterval time.Duration
+	SourceLease     time.Duration
 }
 
 func (o *StreamOptions) setDefaults() {
@@ -32,6 +33,9 @@ func (o *StreamOptions) setDefaults() {
 	}
 	if o.FlushAfter <= 0 {
 		o.FlushAfter = 30 * time.Second
+	}
+	if o.MinClipInterval <= 0 {
+		o.MinClipInterval = 5 * time.Minute
 	}
 	if o.SourceLease <= 0 {
 		o.SourceLease = 2 * time.Minute
@@ -54,6 +58,7 @@ type StreamStatus struct {
 	MaxFrames       int           `json:"max_frames"`
 	FrameDelay      time.Duration `json:"frame_delay"`
 	FlushAfter      time.Duration `json:"flush_after"`
+	MinClipInterval time.Duration `json:"min_clip_interval"`
 	Received        uint64        `json:"received"`
 	Coalesced       uint64        `json:"coalesced"`
 	DroppedFrames   uint64        `json:"dropped_frames"`
@@ -64,6 +69,7 @@ type StreamStatus struct {
 	FirstFrameAt    time.Time     `json:"first_frame_at,omitempty"`
 	LastFrameAt     time.Time     `json:"last_frame_at,omitempty"`
 	NextFlushAt     time.Time     `json:"next_flush_at,omitempty"`
+	NextClipAt      time.Time     `json:"next_clip_at,omitempty"`
 	LastClipBuiltAt time.Time     `json:"last_clip_built_at,omitempty"`
 }
 
@@ -88,6 +94,7 @@ type Stream struct {
 	lastFrameAt   time.Time
 	lastSlot      int
 	ready         []*image.RGBA
+	readyForced   bool
 	current       []*image.RGBA
 	lastClipAt    time.Time
 }
@@ -154,7 +161,7 @@ func (s *Stream) addFrame(frame *image.RGBA, source string, now time.Time) (Stre
 	}
 
 	if len(s.building) >= s.opts.MaxFrames {
-		s.queueLocked()
+		s.queueLocked(false)
 	}
 
 	return s.statusLocked(now), nil
@@ -172,7 +179,7 @@ func (s *Stream) Flush(source string) (StreamStatus, error) {
 		return s.statusLocked(now), err
 	}
 
-	s.queueLocked()
+	s.queueLocked(true)
 
 	return s.statusLocked(now), nil
 }
@@ -214,12 +221,14 @@ func (s *Stream) Render(_ context.Context, now time.Time) (Frame, time.Duration,
 	defer s.mu.Unlock()
 
 	if len(s.building) > 0 && !now.Before(s.buildingStart.Add(s.opts.FlushAfter)) {
-		s.queueLocked()
+		s.queueLocked(false)
 	}
 
-	if len(s.ready) > 0 {
+	clipDue := len(s.current) == 0 || s.readyForced || !now.Before(s.lastClipAt.Add(s.opts.MinClipInterval))
+	if len(s.ready) > 0 && clipDue {
 		s.current = s.ready
 		s.ready = nil
+		s.readyForced = false
 		s.clipsBuilt++
 		s.lastClipAt = now
 	}
@@ -237,6 +246,12 @@ func (s *Stream) Render(_ context.Context, now time.Time) (Frame, time.Duration,
 	next := time.Minute
 	if len(s.building) > 0 {
 		next = max(s.buildingStart.Add(s.opts.FlushAfter).Sub(now), 50*time.Millisecond)
+	}
+	if len(s.ready) > 0 && len(s.current) > 0 && !s.readyForced {
+		untilClip := max(s.lastClipAt.Add(s.opts.MinClipInterval).Sub(now), 50*time.Millisecond)
+		if untilClip < next {
+			next = untilClip
+		}
 	}
 
 	if len(frames) == 1 {
@@ -257,7 +272,7 @@ func (s *Stream) checkOwnerLocked(source string, now time.Time) error {
 	return nil
 }
 
-func (s *Stream) queueLocked() {
+func (s *Stream) queueLocked(force bool) {
 	if len(s.building) == 0 {
 		return
 	}
@@ -266,6 +281,7 @@ func (s *Stream) queueLocked() {
 	}
 
 	s.ready = s.building
+	s.readyForced = s.readyForced || force
 	s.building = nil
 	s.buildingStart = time.Time{}
 	s.lastSlot = -1
@@ -275,6 +291,7 @@ func (s *Stream) dropPendingLocked() {
 	s.dropped += uint64(len(s.building) + len(s.ready))
 	s.building = nil
 	s.ready = nil
+	s.readyForced = false
 	s.buildingStart = time.Time{}
 	s.lastSlot = -1
 }
@@ -293,6 +310,7 @@ func (s *Stream) statusLocked(now time.Time) StreamStatus {
 		MaxFrames:       s.opts.MaxFrames,
 		FrameDelay:      s.opts.FrameDelay,
 		FlushAfter:      s.opts.FlushAfter,
+		MinClipInterval: s.opts.MinClipInterval,
 		Received:        s.received,
 		Coalesced:       s.coalesced,
 		DroppedFrames:   s.dropped,
@@ -307,6 +325,9 @@ func (s *Stream) statusLocked(now time.Time) StreamStatus {
 
 	if len(s.building) > 0 {
 		st.NextFlushAt = s.buildingStart.Add(s.opts.FlushAfter)
+	}
+	if len(s.ready) > 0 && len(s.current) > 0 && !s.readyForced {
+		st.NextClipAt = s.lastClipAt.Add(s.opts.MinClipInterval)
 	}
 	if !s.leaseUntil.After(now) && s.source != "" {
 		// The source remains useful history, but an expired lease should not be

@@ -58,6 +58,12 @@ clip one picture ID. The panel loops the current clip locally while the next is
 built. There is no unbounded queue: if the producer outruns the panel, the newest
 complete clip replaces the older pending clip.
 
+Once a clip is resident, automatic replacements are limited by
+`stream.min_clip_interval` (five minutes by default). Frames may continue to
+arrive at full renderer speed; completed pending clips collapse to the newest
+one. An explicit `/api/stream/flush` remains an immediate commit and bypasses
+that interval.
+
 `source` is a producer-chosen stable name. It leases the stream so frames from
 two applications cannot be interleaved. It may also be supplied in the
 `X-Pixoo-Source` header. Turning the screen off clears the buffered and active
