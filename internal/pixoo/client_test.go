@@ -241,6 +241,9 @@ func TestPushAnimationSendsEveryFrameUnderOneID(t *testing.T) {
 	if got := dev.picIDs; len(got) != 3 || got[0] != 1 || got[1] != 1 || got[2] != 1 {
 		t.Fatalf("pic ids = %v, want three frames under id 1", got)
 	}
+	if st := c.Status(); st.Animations != 1 || st.AnimationFrames != 3 || st.Frames != 1 {
+		t.Fatalf("animation status = %+v", st)
+	}
 
 	if _, err := c.PushAnimation(context.Background(), make([][]byte, MaxFrames+1), time.Second); err == nil {
 		t.Fatal("expected an error for too many frames")

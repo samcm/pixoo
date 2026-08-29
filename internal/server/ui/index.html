@@ -53,6 +53,8 @@
         <span>override</span><span id="override">–</span>
         <span>latency</span><span id="latency">–</span>
         <span>frames</span><span id="frames">–</span>
+        <span>animations</span><span id="animations">–</span>
+        <span>animation frames</span><span id="animationframes">–</span>
         <span>skipped</span><span id="skipped">–</span>
         <span>errors</span><span id="errors">–</span>
         <span>pic id</span><span id="picid">–</span>
@@ -60,6 +62,18 @@
         <span>uptime</span><span id="uptime">–</span>
       </div>
       <div id="lasterr" class="err"></div>
+    </section>
+    <section>
+      <h2>Buffered stream</h2>
+      <div class="stats">
+        <span>source</span><span id="streamsource">idle</span>
+        <span>buffer</span><span id="streambuffer">0</span>
+        <span>current clip</span><span id="streamcurrent">0 frames</span>
+        <span>next flush</span><span id="streamflush">–</span>
+        <span>clips built</span><span id="streamclips">0</span>
+        <span>coalesced</span><span id="streamcoalesced">0</span>
+        <span>dropped</span><span id="streamdropped">0</span>
+      </div>
     </section>
     <section>
       <h2>Rotation</h2>
@@ -151,11 +165,21 @@ async function refresh() {
     $('override').textContent = st.override ? st.override.scene + (st.override.until ? ' until ' + new Date(st.override.until).toLocaleTimeString() : ' (held)') : 'none';
     $('latency').textContent = dev.latency_ms + ' ms';
     $('frames').textContent = dev.frames;
+    $('animations').textContent = dev.animations;
+    $('animationframes').textContent = dev.animation_frames;
     $('skipped').textContent = dev.skipped;
     $('errors').textContent = dev.errors;
     $('picid').textContent = dev.pic_id;
     $('sinceboot').textContent = dev.pushes_since_boot + (dev.reboots ? ' (' + dev.reboots + ' reboots)' : '');
     $('uptime').textContent = fmtUptime(st.uptime_seconds);
+    const stream = st.stream;
+    $('streamsource').textContent = stream.source || 'idle';
+    $('streambuffer').textContent = stream.building_frames + ' / ' + stream.max_frames + (stream.ready_frames ? ` (+${stream.ready_frames} ready)` : '');
+    $('streamcurrent').textContent = stream.current_frames + ' frames';
+    $('streamflush').textContent = stream.next_flush_at && !stream.next_flush_at.startsWith('0001-') ? new Date(stream.next_flush_at).toLocaleTimeString() : '–';
+    $('streamclips').textContent = stream.clips_built;
+    $('streamcoalesced').textContent = stream.coalesced;
+    $('streamdropped').textContent = stream.dropped_frames;
     $('lasterr').textContent = dev.last_error && !dev.online ? dev.last_error : '';
     if (!dragging && st.brightness >= 0) { $('bright').value = st.brightness; $('bval').textContent = st.brightness; }
     const rot = $('rotation'); rot.innerHTML = '';

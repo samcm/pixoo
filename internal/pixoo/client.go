@@ -60,16 +60,18 @@ func (o *Options) setDefaults() {
 }
 
 type Status struct {
-	Online      bool      `json:"online"`
-	LastOK      time.Time `json:"last_ok"`
-	LastError   string    `json:"last_error,omitempty"`
-	LastErrorAt time.Time `json:"last_error_at"`
-	LatencyMS   int64     `json:"latency_ms"`
-	Requests    uint64    `json:"requests"`
-	Frames      uint64    `json:"frames"`
-	Skipped     uint64    `json:"skipped"`
-	Errors      uint64    `json:"errors"`
-	PicID       int       `json:"pic_id"`
+	Online          bool      `json:"online"`
+	LastOK          time.Time `json:"last_ok"`
+	LastError       string    `json:"last_error,omitempty"`
+	LastErrorAt     time.Time `json:"last_error_at"`
+	LatencyMS       int64     `json:"latency_ms"`
+	Requests        uint64    `json:"requests"`
+	Frames          uint64    `json:"frames"`
+	Animations      uint64    `json:"animations"`
+	AnimationFrames uint64    `json:"animation_frames"`
+	Skipped         uint64    `json:"skipped"`
+	Errors          uint64    `json:"errors"`
+	PicID           int       `json:"pic_id"`
 	// PushesSinceBoot counts frames since the panel last (re)booted as far
 	// as this process knows; it resets on Reboot and starts at zero.
 	PushesSinceBoot int       `json:"pushes_since_boot"`
@@ -309,7 +311,7 @@ func (c *Client) PushFrame(ctx context.Context, rgb []byte) (bool, error) {
 		return false, err
 	}
 
-	c.framePushed(hash)
+	c.framePushed(hash, 0)
 
 	return true, nil
 }
@@ -361,7 +363,7 @@ func (c *Client) PushAnimation(ctx context.Context, frames [][]byte, delay time.
 		}
 	}
 
-	c.framePushed(hash)
+	c.framePushed(hash, len(frames))
 
 	return true, nil
 }
@@ -389,7 +391,7 @@ func (c *Client) unchanged(hash [sha256.Size]byte) bool {
 	return false
 }
 
-func (c *Client) framePushed(hash [sha256.Size]byte) {
+func (c *Client) framePushed(hash [sha256.Size]byte, animationFrames int) {
 	c.lastHash = hash
 	c.hasLast = true
 	c.lastFrame = time.Now()
@@ -399,6 +401,10 @@ func (c *Client) framePushed(hash [sha256.Size]byte) {
 
 	c.stateMu.Lock()
 	c.status.Frames++
+	if animationFrames > 0 {
+		c.status.Animations++
+		c.status.AnimationFrames += uint64(animationFrames)
+	}
 	c.status.PicID = c.picID
 	c.status.PushesSinceBoot = c.sinceBoot
 	c.stateMu.Unlock()

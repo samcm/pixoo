@@ -47,6 +47,7 @@ type App struct {
 	syncTime   bool
 	loc        *time.Location
 	logger     *slog.Logger
+	stream     *scene.Stream
 	started    time.Time
 	wake       chan struct{}
 
@@ -88,6 +89,8 @@ func New(o Options) (*App, error) {
 		o.Logger = slog.Default()
 	}
 
+	stream, _ := o.Scenes["stream"].(*scene.Stream)
+
 	return &App{
 		client:     o.Client,
 		scenes:     o.Scenes,
@@ -97,6 +100,7 @@ func New(o Options) (*App, error) {
 		syncTime:   o.SyncTime,
 		loc:        o.Location,
 		logger:     o.Logger.WithGroup("app"),
+		stream:     stream,
 		wake:       make(chan struct{}, 1),
 		brightNow:  -1,
 	}, nil
@@ -446,6 +450,54 @@ func (a *App) SetImage(data []byte, label string, d time.Duration) error {
 	return a.Show("image", d)
 }
 
+func (a *App) AddStreamFrame(data []byte, source string, d time.Duration) (scene.StreamStatus, error) {
+	if a.stream == nil {
+		return scene.StreamStatus{}, errors.New("stream scene not available")
+	}
+
+	st, err := a.stream.Add(data, source)
+	if err != nil {
+		return st, err
+	}
+	if err := a.Show("stream", d); err != nil {
+		return st, err
+	}
+
+	return st, nil
+}
+
+func (a *App) FlushStream(source string, d time.Duration) (scene.StreamStatus, error) {
+	if a.stream == nil {
+		return scene.StreamStatus{}, errors.New("stream scene not available")
+	}
+
+	st, err := a.stream.Flush(source)
+	if err != nil {
+		return st, err
+	}
+	if err := a.Show("stream", d); err != nil {
+		return st, err
+	}
+
+	return st, nil
+}
+
+func (a *App) ResetStream(source string) (scene.StreamStatus, error) {
+	if a.stream == nil {
+		return scene.StreamStatus{}, errors.New("stream scene not available")
+	}
+
+	return a.stream.Reset(source)
+}
+
+func (a *App) StreamStatus() scene.StreamStatus {
+	if a.stream == nil {
+		return scene.StreamStatus{}
+	}
+
+	return a.stream.Status()
+}
+
 func (a *App) Command(ctx context.Context, command string, args map[string]any) (map[string]any, error) {
 	return a.client.Command(ctx, command, args)
 }
@@ -484,18 +536,19 @@ type Override struct {
 }
 
 type Status struct {
-	Host          string       `json:"host"`
-	Device        pixoo.Status `json:"device"`
-	Scene         string       `json:"scene"`
-	Kind          string       `json:"kind"`
-	Override      *Override    `json:"override,omitempty"`
-	Rotation      []Entry      `json:"rotation"`
-	RotationIndex int          `json:"rotation_index"`
-	RotationEnds  time.Time    `json:"rotation_ends"`
-	ScreenOff     bool         `json:"screen_off"`
-	Brightness    int          `json:"brightness"`
-	UptimeSeconds int64        `json:"uptime_seconds"`
-	Now           time.Time    `json:"now"`
+	Host          string             `json:"host"`
+	Device        pixoo.Status       `json:"device"`
+	Scene         string             `json:"scene"`
+	Kind          string             `json:"kind"`
+	Override      *Override          `json:"override,omitempty"`
+	Rotation      []Entry            `json:"rotation"`
+	RotationIndex int                `json:"rotation_index"`
+	RotationEnds  time.Time          `json:"rotation_ends"`
+	ScreenOff     bool               `json:"screen_off"`
+	Brightness    int                `json:"brightness"`
+	UptimeSeconds int64              `json:"uptime_seconds"`
+	Stream        scene.StreamStatus `json:"stream"`
+	Now           time.Time          `json:"now"`
 }
 
 func (a *App) Status() Status {
@@ -512,6 +565,7 @@ func (a *App) Status() Status {
 		ScreenOff:     a.screenOff,
 		Brightness:    a.brightNow,
 		UptimeSeconds: int64(time.Since(a.started).Seconds()),
+		Stream:        a.StreamStatus(),
 		Now:           time.Now(),
 	}
 

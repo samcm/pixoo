@@ -13,10 +13,18 @@ type Config struct {
 	Listen   string           `yaml:"listen"`
 	Timezone string           `yaml:"timezone"`
 	Device   Device           `yaml:"device"`
+	Stream   Stream           `yaml:"stream"`
 	Beacon   Beacon           `yaml:"beacon"`
 	Scenes   map[string]Scene `yaml:"scenes"`
 	Rotation []Rotation       `yaml:"rotation"`
 	Log      Log              `yaml:"log"`
+}
+
+type Stream struct {
+	MaxFrames   int           `yaml:"max_frames"`
+	FrameDelay  time.Duration `yaml:"frame_delay"`
+	FlushAfter  time.Duration `yaml:"flush_after"`
+	SourceLease time.Duration `yaml:"source_lease"`
 }
 
 type Device struct {
@@ -67,6 +75,12 @@ func Default() Config {
 			GifIDResetEvery:   32,
 			RebootAfterPushes: 0,
 			SyncTime:          true,
+		},
+		Stream: Stream{
+			MaxFrames:   30,
+			FrameDelay:  time.Second,
+			FlushAfter:  30 * time.Second,
+			SourceLease: 2 * time.Minute,
 		},
 		Log: Log{Level: "info", Format: "text"},
 	}
@@ -124,6 +138,18 @@ func Load(path string) (Config, error) {
 
 	if cfg.Device.Brightness != nil && (*cfg.Device.Brightness < 0 || *cfg.Device.Brightness > 100) {
 		return cfg, fmt.Errorf("config: device.brightness must be 0-100")
+	}
+	if cfg.Stream.MaxFrames < 1 || cfg.Stream.MaxFrames > 60 {
+		return cfg, fmt.Errorf("config: stream.max_frames must be 1-60")
+	}
+	if cfg.Stream.FrameDelay < 50*time.Millisecond {
+		return cfg, fmt.Errorf("config: stream.frame_delay must be at least 50ms")
+	}
+	if cfg.Stream.FlushAfter <= 0 {
+		return cfg, fmt.Errorf("config: stream.flush_after must be positive")
+	}
+	if cfg.Stream.SourceLease <= 0 {
+		return cfg, fmt.Errorf("config: stream.source_lease must be positive")
 	}
 
 	return cfg, nil

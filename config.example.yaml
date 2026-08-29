@@ -21,6 +21,15 @@ device:
   brightness: 70
   sync_time: true
 
+# Individual still-image updates can be submitted here and are assembled into
+# one device-side animation. The first frame appears immediately; subsequent
+# clips are uploaded in bounded batches while the previous clip keeps looping.
+stream:
+  max_frames: 30
+  frame_delay: 1s
+  flush_after: 30s
+  source_lease: 2m
+
 beacon:
   url: http://192.168.1.139:5052
   validators: []

@@ -63,7 +63,7 @@ func run() error {
 		deps.Beacon = beacon.New(cfg.Beacon.URL)
 	}
 
-	scenes := make(map[string]scene.Scene, len(cfg.Scenes)+3)
+	scenes := make(map[string]scene.Scene, len(cfg.Scenes)+4)
 
 	for name, sc := range cfg.Scenes {
 		s, err := scene.New(sc.Kind, name, sc.Options, deps)
@@ -86,6 +86,15 @@ func run() error {
 
 		scenes[builtin] = s
 	}
+
+	// The buffered stream is a transport feature rather than part of the
+	// configured rotation, so it is always available under a stable name.
+	scenes["stream"] = scene.NewStream("stream", scene.StreamOptions{
+		MaxFrames:   cfg.Stream.MaxFrames,
+		FrameDelay:  cfg.Stream.FrameDelay,
+		FlushAfter:  cfg.Stream.FlushAfter,
+		SourceLease: cfg.Stream.SourceLease,
+	})
 
 	rotation := make([]app.Entry, 0, len(cfg.Rotation))
 	for _, r := range cfg.Rotation {

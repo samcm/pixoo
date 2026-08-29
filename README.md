@@ -43,7 +43,31 @@ Open http://localhost:6464.
 | POST | `/api/screen` | `{"on":false}` |
 | POST | `/api/text` | `{"text":"hi","color":"#fff","font":"small\|tiny\|big","scroll":false,"seconds":60}` |
 | POST | `/api/image` | multipart `file` (PNG/JPEG/GIF, animated GIFs loop on the panel) + `seconds` |
+| GET | `/api/stream` | buffered stream status |
+| POST | `/api/stream/frame` | multipart still-image `file`, stable `source`, and optional `seconds` |
+| POST | `/api/stream/flush` | `{"source":"renderer","seconds":0}` closes the partial clip now |
+| DELETE | `/api/stream?source=renderer` | discard the stream, release its lease, and resume rotation |
 | POST | `/api/command` | `{"command":"Channel/GetIndex","args":{}}` raw passthrough |
+
+## Buffered streams
+
+Programs which render individual frames should use `/api/stream/frame` instead
+of repeatedly replacing `/api/image`. The daemon samples submissions at the
+configured frame delay, assembles a bounded animation and gives every completed
+clip one picture ID. The panel loops the current clip locally while the next is
+built. There is no unbounded queue: if the producer outruns the panel, the newest
+complete clip replaces the older pending clip.
+
+`source` is a producer-chosen stable name. It leases the stream so frames from
+two applications cannot be interleaved. It may also be supplied in the
+`X-Pixoo-Source` header.
+
+```sh
+curl -F source=my-renderer -F file=@frame.png http://localhost:6464/api/stream/frame
+curl -H 'content-type: application/json' \
+  -d '{"source":"my-renderer","seconds":0}' \
+  http://localhost:6464/api/stream/flush
+```
 
 ## Docker
 

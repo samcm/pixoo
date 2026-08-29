@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/samcm/pixoo/internal/app"
@@ -41,6 +42,10 @@ func New(a *app.App, logger *slog.Logger) *Server {
 	s.mux.HandleFunc("POST /api/screen", s.screen)
 	s.mux.HandleFunc("POST /api/text", s.text)
 	s.mux.HandleFunc("POST /api/image", s.image)
+	s.mux.HandleFunc("GET /api/stream", s.streamStatus)
+	s.mux.HandleFunc("POST /api/stream/frame", s.streamFrame)
+	s.mux.HandleFunc("POST /api/stream/flush", s.streamFlush)
+	s.mux.HandleFunc("DELETE /api/stream", s.streamReset)
 	s.mux.HandleFunc("POST /api/command", s.command)
 	s.mux.HandleFunc("POST /api/reboot", s.reboot)
 
@@ -247,6 +252,105 @@ func (s *Server) image(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.app.Status())
 }
 
+func (s *Server) streamStatus(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.app.StreamStatus())
+}
+
+func (s *Server) streamFrame(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
+
+	if err := r.ParseMultipartForm(maxUpload); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("file field is required"))
+
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+
+		return
+	}
+
+	source := streamSource(r, r.FormValue("source"))
+	if source == "" {
+		writeError(w, http.StatusBadRequest, errors.New("source is required"))
+
+		return
+	}
+	if len(source) > 128 {
+		writeError(w, http.StatusBadRequest, errors.New("source must be at most 128 characters"))
+
+		return
+	}
+
+	secs, _ := strconv.ParseFloat(r.FormValue("seconds"), 64)
+	st, err := s.app.AddStreamFrame(data, source, seconds(secs))
+	if err != nil {
+		writeStreamError(w, err)
+
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, st)
+}
+
+func (s *Server) streamFlush(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Source  string  `json:"source"`
+		Seconds float64 `json:"seconds"`
+	}
+
+	if err := decode(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+
+		return
+	}
+
+	source := streamSource(r, req.Source)
+	if source == "" {
+		writeError(w, http.StatusBadRequest, errors.New("source is required"))
+
+		return
+	}
+
+	st, err := s.app.FlushStream(source, seconds(req.Seconds))
+	if err != nil {
+		writeStreamError(w, err)
+
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, st)
+}
+
+func (s *Server) streamReset(w http.ResponseWriter, r *http.Request) {
+	source := streamSource(r, r.URL.Query().Get("source"))
+	if source == "" {
+		writeError(w, http.StatusBadRequest, errors.New("source is required"))
+
+		return
+	}
+
+	st, err := s.app.ResetStream(source)
+	if err != nil {
+		writeStreamError(w, err)
+
+		return
+	}
+
+	s.app.Resume()
+	writeJSON(w, http.StatusOK, st)
+}
+
 func (s *Server) reboot(w http.ResponseWriter, _ *http.Request) {
 	s.app.RebootPanel()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -303,4 +407,27 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func writeError(w http.ResponseWriter, code int, err error) {
 	writeJSON(w, code, map[string]string{"error": err.Error()})
+}
+
+func streamSource(r *http.Request, value string) string {
+	if value == "" {
+		value = r.Header.Get("X-Pixoo-Source")
+	}
+
+	return strings.TrimSpace(value)
+}
+
+func writeStreamError(w http.ResponseWriter, err error) {
+	var lease *scene.StreamLeaseError
+	if errors.As(err, &lease) {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":       lease.Error(),
+			"holder":      lease.Holder,
+			"lease_until": lease.Until,
+		})
+
+		return
+	}
+
+	writeError(w, http.StatusBadRequest, err)
 }
