@@ -60,7 +60,8 @@ complete clip replaces the older pending clip.
 
 `source` is a producer-chosen stable name. It leases the stream so frames from
 two applications cannot be interleaved. It may also be supplied in the
-`X-Pixoo-Source` header.
+`X-Pixoo-Source` header. Turning the screen off clears the buffered and active
+stream state so partial clips never carry across a blackout.
 
 ```sh
 curl -F source=my-renderer -F file=@frame.png http://localhost:6464/api/stream/frame

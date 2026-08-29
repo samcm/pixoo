@@ -188,12 +188,18 @@ func (s *Stream) Reset(source string) (StreamStatus, error) {
 		return s.statusLocked(now), err
 	}
 
-	s.dropPendingLocked()
-	s.current = nil
-	s.source = ""
-	s.leaseUntil = time.Time{}
+	s.clearLocked()
 
 	return s.statusLocked(now), nil
+}
+
+// Clear unconditionally releases the producer and all clip state. It is used
+// when the panel is turned off so a partial clip cannot leak across a blackout.
+func (s *Stream) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.clearLocked()
 }
 
 func (s *Stream) Status() StreamStatus {
@@ -271,6 +277,13 @@ func (s *Stream) dropPendingLocked() {
 	s.ready = nil
 	s.buildingStart = time.Time{}
 	s.lastSlot = -1
+}
+
+func (s *Stream) clearLocked() {
+	s.dropPendingLocked()
+	s.current = nil
+	s.source = ""
+	s.leaseUntil = time.Time{}
 }
 
 func (s *Stream) statusLocked(now time.Time) StreamStatus {

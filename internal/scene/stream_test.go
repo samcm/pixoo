@@ -138,3 +138,24 @@ func TestStreamFlushesPartialClip(t *testing.T) {
 		t.Fatalf("frames = %d, want timed partial clip of 2", len(frame.Frames))
 	}
 }
+
+func TestStreamClearDropsStateAcrossBlackout(t *testing.T) {
+	s := NewStream("stream", StreamOptions{MaxFrames: 2, FrameDelay: time.Second})
+	now := time.Now()
+
+	if _, err := s.addFrame(solidFrame(1), "studio", now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addFrame(solidFrame(2), "studio", now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Render(t.Context(), now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	s.Clear()
+	st := s.Status()
+	if st.Source != "" || st.BuildingFrames != 0 || st.ReadyFrames != 0 || st.CurrentFrames != 0 {
+		t.Fatalf("status after clear = %+v", st)
+	}
+}

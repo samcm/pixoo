@@ -419,6 +419,9 @@ func (a *App) SetScreen(on bool) error {
 
 		return nil
 	}
+	if a.stream != nil {
+		a.stream.Clear()
+	}
 
 	return a.Show("off", 0)
 }
