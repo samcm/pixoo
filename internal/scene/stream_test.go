@@ -136,7 +136,7 @@ func TestStreamKeepsResidentClipUntilMinimumInterval(t *testing.T) {
 	}
 }
 
-func TestStreamExplicitFlushBypassesMinimumInterval(t *testing.T) {
+func TestStreamExplicitFlushRespectsMinimumInterval(t *testing.T) {
 	s := NewStream("stream", StreamOptions{
 		MaxFrames:       2,
 		FrameDelay:      time.Second,
@@ -161,12 +161,19 @@ func TestStreamExplicitFlushBypassesMinimumInterval(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	replacement, _, err := s.Render(t.Context(), now.Add(3*time.Second))
+	resident, _, err := s.Render(t.Context(), now.Add(3*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resident.Frames[0].RGBAAt(0, 0).R != 1 {
+		t.Fatal("explicit flush bypassed the minimum resident interval")
+	}
+	replacement, _, err := s.Render(t.Context(), now.Add(time.Hour+time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if replacement.Image == nil || replacement.Image.RGBAAt(0, 0).R != 9 {
-		t.Fatal("explicit flush did not replace the resident clip immediately")
+		t.Fatal("flushed partial clip was not installed at the resident deadline")
 	}
 }
 

@@ -66,8 +66,8 @@ complete clip replaces the older pending clip.
 Once a clip is resident, automatic replacements are limited by
 `stream.min_clip_interval` (five minutes by default). Frames may continue to
 arrive at full renderer speed; completed pending clips collapse to the newest
-one. An explicit `/api/stream/flush` remains an immediate commit and bypasses
-that interval.
+one. Explicit flushes close a partial clip but do not bypass the physical
+replacement interval. The same interval protects repeated `/api/image` calls.
 
 `source` is a producer-chosen stable name. It leases the stream so frames from
 two applications cannot be interleaved. It may also be supplied in the

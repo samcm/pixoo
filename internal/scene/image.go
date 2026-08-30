@@ -18,12 +18,16 @@ import (
 )
 
 type Image struct {
-	name      string
-	maxFrames int
+	name        string
+	maxFrames   int
+	minInterval time.Duration
 
-	mu    sync.Mutex
-	frame Frame
-	label string
+	mu            sync.Mutex
+	frame         Frame
+	ready         Frame
+	label         string
+	readyLabel    string
+	lastActivated time.Time
 }
 
 func newImage(name string, opts map[string]any, deps Deps) (Scene, error) {
@@ -31,7 +35,7 @@ func newImage(name string, opts map[string]any, deps Deps) (Scene, error) {
 	if maxFrames <= 0 || maxFrames > pixoo.MaxFrames {
 		maxFrames = pixoo.MaxFrames
 	}
-	img := &Image{name: name, maxFrames: maxFrames}
+	img := &Image{name: name, maxFrames: maxFrames, minInterval: deps.AnimationMinUpdate}
 
 	if path := optString(opts, "path", ""); path != "" {
 		data, err := os.ReadFile(path)
@@ -67,21 +71,36 @@ func (i *Image) Set(data []byte, label string) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	i.frame = frame
-	i.label = label
+	i.ready = frame
+	i.readyLabel = label
 
 	return nil
 }
 
-func (i *Image) Render(context.Context, time.Time) (Frame, time.Duration, error) {
+func (i *Image) Render(_ context.Context, now time.Time) (Frame, time.Duration, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	if i.frame.Image == nil && len(i.frame.Frames) == 0 {
+	hasCurrent := i.frame.Image != nil || len(i.frame.Frames) > 0
+	hasReady := i.ready.Image != nil || len(i.ready.Frames) > 0
+	if hasReady && (!hasCurrent || i.minInterval <= 0 || !now.Before(i.lastActivated.Add(i.minInterval))) {
+		i.frame = i.ready
+		i.ready = Frame{}
+		i.label = i.readyLabel
+		i.readyLabel = ""
+		i.lastActivated = now
+		hasCurrent = true
+		hasReady = false
+	}
+	if !hasCurrent {
 		return Frame{}, 0, fmt.Errorf("scene %s: no image loaded", i.name)
 	}
 
-	return i.frame, time.Minute, nil
+	next := time.Minute
+	if hasReady {
+		next = max(i.lastActivated.Add(i.minInterval).Sub(now), 50*time.Millisecond)
+	}
+	return i.frame, next, nil
 }
 
 func Decode(data []byte) (Frame, error) {

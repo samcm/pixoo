@@ -55,6 +55,7 @@ type Deps struct {
 	Location           *time.Location
 	Logger             *slog.Logger
 	AnimationMaxFrames int
+	AnimationMinUpdate time.Duration
 }
 
 type Factory func(name string, opts map[string]any, deps Deps) (Scene, error)

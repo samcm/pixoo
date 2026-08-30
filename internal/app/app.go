@@ -448,8 +448,6 @@ func (a *App) SetImage(data []byte, label string, d time.Duration) error {
 		return err
 	}
 
-	a.client.Invalidate()
-
 	return a.Show("image", d)
 }
 

@@ -58,6 +58,7 @@ func run() error {
 		Location:           loc,
 		Logger:             logger,
 		AnimationMaxFrames: cfg.Stream.MaxFrames,
+		AnimationMinUpdate: cfg.Stream.MinClipInterval,
 	}
 
 	if cfg.Beacon.URL != "" {

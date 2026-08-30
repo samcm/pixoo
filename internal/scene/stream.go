@@ -94,7 +94,6 @@ type Stream struct {
 	lastFrameAt   time.Time
 	lastSlot      int
 	ready         []*image.RGBA
-	readyForced   bool
 	current       []*image.RGBA
 	lastClipAt    time.Time
 }
@@ -161,7 +160,7 @@ func (s *Stream) addFrame(frame *image.RGBA, source string, now time.Time) (Stre
 	}
 
 	if len(s.building) >= s.opts.MaxFrames {
-		s.queueLocked(false)
+		s.queueLocked()
 	}
 
 	return s.statusLocked(now), nil
@@ -179,7 +178,7 @@ func (s *Stream) Flush(source string) (StreamStatus, error) {
 		return s.statusLocked(now), err
 	}
 
-	s.queueLocked(true)
+	s.queueLocked()
 
 	return s.statusLocked(now), nil
 }
@@ -221,14 +220,13 @@ func (s *Stream) Render(_ context.Context, now time.Time) (Frame, time.Duration,
 	defer s.mu.Unlock()
 
 	if len(s.building) > 0 && !now.Before(s.buildingStart.Add(s.opts.FlushAfter)) {
-		s.queueLocked(false)
+		s.queueLocked()
 	}
 
-	clipDue := len(s.current) == 0 || s.readyForced || !now.Before(s.lastClipAt.Add(s.opts.MinClipInterval))
+	clipDue := len(s.current) == 0 || !now.Before(s.lastClipAt.Add(s.opts.MinClipInterval))
 	if len(s.ready) > 0 && clipDue {
 		s.current = s.ready
 		s.ready = nil
-		s.readyForced = false
 		s.clipsBuilt++
 		s.lastClipAt = now
 	}
@@ -247,7 +245,7 @@ func (s *Stream) Render(_ context.Context, now time.Time) (Frame, time.Duration,
 	if len(s.building) > 0 {
 		next = max(s.buildingStart.Add(s.opts.FlushAfter).Sub(now), 50*time.Millisecond)
 	}
-	if len(s.ready) > 0 && len(s.current) > 0 && !s.readyForced {
+	if len(s.ready) > 0 && len(s.current) > 0 {
 		untilClip := max(s.lastClipAt.Add(s.opts.MinClipInterval).Sub(now), 50*time.Millisecond)
 		if untilClip < next {
 			next = untilClip
@@ -272,7 +270,7 @@ func (s *Stream) checkOwnerLocked(source string, now time.Time) error {
 	return nil
 }
 
-func (s *Stream) queueLocked(force bool) {
+func (s *Stream) queueLocked() {
 	if len(s.building) == 0 {
 		return
 	}
@@ -281,7 +279,6 @@ func (s *Stream) queueLocked(force bool) {
 	}
 
 	s.ready = s.building
-	s.readyForced = s.readyForced || force
 	s.building = nil
 	s.buildingStart = time.Time{}
 	s.lastSlot = -1
@@ -291,7 +288,6 @@ func (s *Stream) dropPendingLocked() {
 	s.dropped += uint64(len(s.building) + len(s.ready))
 	s.building = nil
 	s.ready = nil
-	s.readyForced = false
 	s.buildingStart = time.Time{}
 	s.lastSlot = -1
 }
@@ -326,7 +322,7 @@ func (s *Stream) statusLocked(now time.Time) StreamStatus {
 	if len(s.building) > 0 {
 		st.NextFlushAt = s.buildingStart.Add(s.opts.FlushAfter)
 	}
-	if len(s.ready) > 0 && len(s.current) > 0 && !s.readyForced {
+	if len(s.ready) > 0 && len(s.current) > 0 {
 		st.NextClipAt = s.lastClipAt.Add(s.opts.MinClipInterval)
 	}
 	if !s.leaseUntil.After(now) && s.source != "" {
