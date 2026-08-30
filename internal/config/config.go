@@ -78,7 +78,7 @@ func Default() Config {
 			SyncTime:          true,
 		},
 		Stream: Stream{
-			MaxFrames:       30,
+			MaxFrames:       8,
 			FrameDelay:      time.Second,
 			FlushAfter:      30 * time.Second,
 			MinClipInterval: 5 * time.Minute,

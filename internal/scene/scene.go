@@ -49,11 +49,12 @@ type WeatherSource interface {
 }
 
 type Deps struct {
-	Weather    WeatherSource
-	Beacon     *beacon.Client
-	Validators []uint64
-	Location   *time.Location
-	Logger     *slog.Logger
+	Weather            WeatherSource
+	Beacon             *beacon.Client
+	Validators         []uint64
+	Location           *time.Location
+	Logger             *slog.Logger
+	AnimationMaxFrames int
 }
 
 type Factory func(name string, opts map[string]any, deps Deps) (Scene, error)

@@ -49,6 +49,11 @@ Open http://localhost:6464.
 | DELETE | `/api/stream?source=renderer` | discard the stream, release its lease, and resume rotation |
 | POST | `/api/command` | `{"command":"Channel/GetIndex","args":{}}` raw passthrough |
 
+Animated GIFs submitted to `/api/image` are sampled down to
+`stream.max_frames`. The conservative default is eight: the firmware advertises
+a larger protocol limit, but large sequential animation uploads can leave some
+Pixoo64 units stuck on their loading screen.
+
 ## Buffered streams
 
 Programs which render individual frames should use `/api/stream/frame` instead

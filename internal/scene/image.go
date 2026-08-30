@@ -18,15 +18,20 @@ import (
 )
 
 type Image struct {
-	name string
+	name      string
+	maxFrames int
 
 	mu    sync.Mutex
 	frame Frame
 	label string
 }
 
-func newImage(name string, opts map[string]any, _ Deps) (Scene, error) {
-	img := &Image{name: name}
+func newImage(name string, opts map[string]any, deps Deps) (Scene, error) {
+	maxFrames := deps.AnimationMaxFrames
+	if maxFrames <= 0 || maxFrames > pixoo.MaxFrames {
+		maxFrames = pixoo.MaxFrames
+	}
+	img := &Image{name: name, maxFrames: maxFrames}
 
 	if path := optString(opts, "path", ""); path != "" {
 		data, err := os.ReadFile(path)
@@ -54,7 +59,7 @@ func (i *Image) Label() string {
 
 // Set decodes a PNG, JPEG or GIF. Animated GIFs become device-side animations.
 func (i *Image) Set(data []byte, label string) error {
-	frame, err := Decode(data)
+	frame, err := decode(data, i.maxFrames)
 	if err != nil {
 		return err
 	}
@@ -80,6 +85,10 @@ func (i *Image) Render(context.Context, time.Time) (Frame, time.Duration, error)
 }
 
 func Decode(data []byte) (Frame, error) {
+	return decode(data, pixoo.MaxFrames)
+}
+
+func decode(data []byte, maxFrames int) (Frame, error) {
 	if bytes.HasPrefix(data, []byte("GIF8")) {
 		g, err := gif.DecodeAll(bytes.NewReader(data))
 		if err != nil {
@@ -87,7 +96,7 @@ func Decode(data []byte) (Frame, error) {
 		}
 
 		if len(g.Image) > 1 {
-			return decodeAnimation(g), nil
+			return decodeAnimation(g, maxFrames), nil
 		}
 	}
 
@@ -99,7 +108,7 @@ func Decode(data []byte) (Frame, error) {
 	return Frame{Image: render.Fit(img)}, nil
 }
 
-func decodeAnimation(g *gif.GIF) Frame {
+func decodeAnimation(g *gif.GIF, maxFrames int) Frame {
 	bounds := image.Rect(0, 0, g.Config.Width, g.Config.Height)
 	if bounds.Empty() {
 		bounds = g.Image[0].Bounds()
@@ -125,11 +134,11 @@ func decodeAnimation(g *gif.GIF) Frame {
 		}
 	}
 
-	if len(frames) > pixoo.MaxFrames {
-		stride := float64(len(frames)) / float64(pixoo.MaxFrames)
-		picked := make([]*image.RGBA, 0, pixoo.MaxFrames)
+	if len(frames) > maxFrames {
+		stride := float64(len(frames)) / float64(maxFrames)
+		picked := make([]*image.RGBA, 0, maxFrames)
 
-		for n := 0; n < pixoo.MaxFrames; n++ {
+		for n := 0; n < maxFrames; n++ {
 			picked = append(picked, frames[int(float64(n)*stride)])
 		}
 

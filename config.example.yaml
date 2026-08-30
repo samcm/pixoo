@@ -27,7 +27,9 @@ device:
 # Ready clips collapse to the newest one during the minimum resident interval,
 # avoiding a visible device reload for every renderer batch.
 stream:
-  max_frames: 30
+  # This cap also applies to animated GIFs accepted by /api/image. Although the
+  # protocol advertises 60 frames, larger uploads can wedge real Pixoo64 units.
+  max_frames: 8
   frame_delay: 1s
   flush_after: 30s
   min_clip_interval: 5m

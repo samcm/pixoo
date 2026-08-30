@@ -53,10 +53,11 @@ func run() error {
 	}, logger)
 
 	deps := scene.Deps{
-		Weather:    client,
-		Validators: cfg.Beacon.Validators,
-		Location:   loc,
-		Logger:     logger,
+		Weather:            client,
+		Validators:         cfg.Beacon.Validators,
+		Location:           loc,
+		Logger:             logger,
+		AnimationMaxFrames: cfg.Stream.MaxFrames,
 	}
 
 	if cfg.Beacon.URL != "" {
